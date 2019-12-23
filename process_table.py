@@ -16,8 +16,8 @@ through every row in the table that is iterated over.
 
 import os
 import sys
-import logging
 import getpass
+import logging
 import argparse
 import pandas as pd
 from subprocess import call
@@ -33,55 +33,40 @@ DESCRIPTION = '''
 EPILOG = '''Example:
      $ python process_table.py /home/rick/projects/youtube_upload/table.xlsx'''
 
+# text in the caption, args to format are drawn in from the table
+TEXT = (f"Published on { dt.now().strftime('%B %d, %Y') }\n\n"
+"NOTE: No captions are provided because all sound is underwater or background"
+"noise.\n\n\nThis video was collected in {0} as part of the EPA Environmental "
+"Assessment Research Programs.\n\n\nFor more information about EPA: "
+"http://www.epa.gov/ We accept comments according to out comment policy: "
+"http://blog.epa.gov/blog/comment-policy/")
 
-def main(fn):
+
+def process(fn):
+
     if fn.split('.')[-1] == 'xlsx':
+        is_xl = True
         tbl = pd.read_excel(fn)
+
     if fn.split('.')[-1] == 'csv':
+        is_xl = False
         tbl = pd.read_csv(fn)
+        tbl.DateCollected = tbl.DateCollected.str.slice(stop=4)
+
     uid_col = 'UID'
     path_col = 'Path'
-    # print(tbl.head())
-    columns = [
-                 'NewforMapViewer',
-                 'UID',
-    ]
-
+    date_col = 'DateCollected'
     tbl = tbl.loc[tbl.NewforMapViewer == 'yes']
-    
-    try: # check column for uniqueness, fail gracefully if not.
-        assert tbl[uid_col].is_unique
-    except AssertionError as e:
 
-        logging.critical('%s column is not unique. FAIL!', uid_col)
-        print (f'{uid_col} column is not unique. FAIL!')
-        sys.exit()
-    try: # check column for uniqueness, fail gracefully if not.
-        assert tbl[path_col].is_unique
-    except AssertionError as e:
-        logging.critical('%s column is not unique. FAIL!', path_col)
-        print (f'{path_col} column is not unique. FAIL!')
-        sys.exit()
+    validate_column_uniqueness([uid_col, path_col], tbl)
+
     tbl.set_index('UID', inplace=True, drop=False)
-
-        
-    # tbl.index.is_unique
-    # tbl.Path.is_unique
-    # tbl.Filename.is_unique
-    # tbl.Filename.loc[tbl.Filename.duplicated()]
-    # tbl.loc[tbl.index.duplicated()].index
-    
-    # for uid in tbl.loc[tbl.index.duplicated()].index:
-    #     print(tbl.loc[uid].Path)
-    #     print(tbl.loc[uid].Path)
-
     for uid, location in tbl.Path.iteritems():
         miss = 0
         # print ('HERE:', location)
         if not os.path.exists(location):
             print (f"UID: <{uid}> doesn't exist in the given location:")
             print ('\t' + f"{location}")
-
             miss += 1
     if miss:
         print ('Either find these files and update, '
@@ -90,47 +75,34 @@ def main(fn):
                          'they were stated to be!')
         sys.exit()
 
+    for uid, row in tbl.iterrows():
 
-    # logging.info(' %s ', EXEC_TIME)
-    # logging.warning(' %s ', EXEC_TIME)
-    # logging.error('this is an error!')
-    # logging.critical('this is an error!')
-
-year = 2222
-# formatted description
-(f"---------\n\nPublished on { dt.now().strftime('%B %d, %Y') }"
-"NOTE: No captions are provided because all sound is underwater or background"
-f"noise.\n\n\nThis video was collected in { year } as part of the EPA Environmental "
-"Assessment Research Programs.\n\n\nFor more information about EPA: "
-"http://www.epa.gov/ We accept comments according to out comment policy: "
-"http://blog.epa.gov/blog/comment-policy/")
-
-'''
----------
-
-
-{ dt.now().strftime("%B %d, %Y") }
-Published on December 19, 2019
-
-NOTE: No captions are provided because all sound is underwater or background noise.
-
-
-
-This video was collected in 2017 as part of the EPA Environmental Assessment Research Programs.
-
-For more information about EPA: http://www.epa.gov/ We accept comments according to out comment policy: http://blog.epa.gov/blog/comment-policy/
-
-
-
-------------
-'''
-    # call(['python','--version'])
-    # for idx, row in tbl.iterrows():
-    #     print(idx)
-    #     call(['python','upload_video.py','--file',row.filename,'--description',
-    #         row.description,'--title',row.title])
+        # csv format won't be read-in as datetime objects like excel
+        desc = TEXT.format(row[date_col].year if is_xl else row[date_col])
+        response = call(['python', 'upload_video.py',
+                          '--file',row.Path,
+                          '--description', desc,
+                          '--title', f'{row.StudyName} -- {row.UID}',
+                          '--privacyStatus','unlisted'])
+        print (response)
+        logging.info('%s -- UID: %s successfully uploaded.', dt.now(), row.UID)
 
 def is_valid_file(parser, arg):
+    '''
+    Check that the file exists and that it is of the right type for processing.
+
+    Parameters
+    ----------
+    parser : ArgumentParser
+        instance of argparse.ArgumentParser.
+    arg : string
+        Absolute path to CSV or Excel file.
+
+    Returns
+    -------
+    arg : string
+        Absolute path to CSV or Excel file.
+    '''
     if not os.path.isfile(arg):
         parser.error(f"The file {arg} does not exist!")
     ft = arg.split('.')[-1]
@@ -138,12 +110,33 @@ def is_valid_file(parser, arg):
         parser.error(f"This script doesn't support this filetype: .{ft}")
     return arg
 
+def validate_column_uniqueness(cols, df):
+    '''
+    Checks that each column in the iterable is unique in the table. Will fail
+    gracefully with print statements and additions to the log file if not.
+
+    Parameters
+    ----------
+    cols : iterable
+        Titles of columns in the df to be checked for uniqueness.
+    df : DataFrame
+        Table of data.
+
+    Returns
+    -------
+    None.
+
+    '''
+    for col in cols:
+        try:
+            assert df[col].is_unique
+        except AssertionError:
+            logging.critical('%s column is not unique. FAIL!', col)
+            print (f'{col} column is not unique. FAIL!')
+            sys.exit()
+
 if __name__ == '__main__':
 
-    if os.sep in  sys.argv[0]:
-        print ('Please run this file in the directory where it is located!\n'
-               'so that the .logging/ directory can be found if needed later!')
-        sys.exit()
     formatter_class = argparse.RawDescriptionHelpFormatter
     parser = argparse.ArgumentParser(prog='process_tables.py',
             formatter_class=formatter_class,
@@ -152,22 +145,19 @@ if __name__ == '__main__':
     parser.add_argument("file", help="path/to/xl/or/csv/table.xlsx",
                         type=lambda x: is_valid_file(parser, x))
     args = parser.parse_args()
-    EXEC_TIME = dt.now()
     if not os.path.exists('./.logging'):
         os.mkdir('./.logging')
     script_name = sys.argv[0].split('.')[0].split(os.sep)[-1]
-    fn = ( f".logging/{script_name}_{EXEC_TIME.strftime('%s')}.log" )
+    fn = ( f".logging/{script_name}_{dt.now().strftime('%s')}.log" )
     logging.basicConfig(level=logging.INFO,
                          filename=fn, format='%(levelname)s: %(message)s')
-    logging.info('DATE: %s', EXEC_TIME)
+    logging.info('DATE: %s', dt.now())
     logging.info('This script was run by: %s', getpass.getuser())
     logging.info('FILE_ARG: %s', sys.argv[1])
-    main(args.file)
-
-
-
-
-
-
-
-
+    if os.sep in  sys.argv[0]:
+        logging.critical('Failed due to running from the wrong directory.')
+        print ('Please run this file in the directory where it is located!\n'
+                'so that the .logging/ directory can be found if needed later!')
+        sys.exit()
+    process(args.file)
+    logging.info('Script finished successfully')
