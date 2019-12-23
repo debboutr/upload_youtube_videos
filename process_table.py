@@ -26,8 +26,8 @@ from datetime import datetime as dt
 DESCRIPTION = '''
     Reads in a table that describe each video recorded that will be uploaded
     to YouTube. Currently, there is no standard on which columns are needed
-    so the script will likely need adjustment there for future runs. There is 
-    also a logging file with a epoch timestamp in the title that will be saved 
+    so the script will likely need adjustment there for future runs. There is
+    also a logging file with a epoch timestamp in the title that will be saved
     here:\n\n\t'''
 
 EPILOG = '''Example:
@@ -74,7 +74,7 @@ def process(fn):
         logging.critical('Failed due to videos missing from where '
                          'they were stated to be!')
         sys.exit()
-
+    print ('Table validation passed, begin calling YouTube API...')
     for uid, row in tbl.iterrows():
 
         # csv format won't be read-in as datetime objects like excel
