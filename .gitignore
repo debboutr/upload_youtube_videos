@@ -1,5 +1,3 @@
 .logging
 *.json
-*.csv
-*.xlsx
 *.mp4
