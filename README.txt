@@ -2,7 +2,7 @@ Here's how I built the environment with Anaconda...
 
 	-- conda create -n ytb pandas xlrd python=3.6
 	-- activate ytb
-	-- pip install --upgrade google-api-python-client google-auth-oauthlib google-auth-httplib2 oauthclient
+	-- pip install --upgrade google-api-python-client google-auth-oauthlib google-auth-httplib2 oauthclient oauth2client
 then, you're good to go.
 
 
